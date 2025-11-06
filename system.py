@@ -5,8 +5,6 @@ import enum
 import getpass
 import textwrap 
 
-# --- 1. Enums (for setting roles, etc.) ---
-
 class UserRole(enum.Enum):
     RIDER = "Rider"
     DRIVER = "Driver"
@@ -20,18 +18,14 @@ class TripStatus(enum.Enum):
 class TransactionType(enum.Enum):
     RIDE_PAYMENT = "RidePayment"
     ADD_FUNDS = "AddFunds"
-    ADMIN_ADJUSTMENT = "AdminAdjustment" # <-- NEWLY ADDED
+    ADMIN_ADJUSTMENT = "AdminAdjustment" 
 
-# --- 2. DATABASE SETUP FUNCTION ---
-# (Unchanged)
 def setup_database():
     """
     Creates the database file and all necessary tables.
     """
     conn = sqlite3.connect('shuttle.db')
     cursor = conn.cursor()
-    
-    # User Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS user (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,8 +36,6 @@ def setup_database():
         wallet_balance REAL NOT NULL DEFAULT 0.0
     );
     """)
-
-    # Shuttle Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS shuttle (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,16 +43,12 @@ def setup_database():
         capacity INTEGER DEFAULT 20
     );
     """)
-
-    # Stop Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS stop (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL
     );
     """)
-
-    # Route Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS route (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,8 +57,6 @@ def setup_database():
         price_per_km REAL NOT NULL DEFAULT 0.25
     );
     """)
-
-    # RouteStop Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS route_stop (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,8 +68,6 @@ def setup_database():
         FOREIGN KEY (stop_id) REFERENCES stop (id)
     );
     """)
-
-    # ActiveTrip Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS active_trip (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,8 +81,6 @@ def setup_database():
         FOREIGN KEY (tap_on_route_stop_id) REFERENCES route_stop (id)
     );
     """)
-
-    # Transaction Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS transaction_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,17 +93,13 @@ def setup_database():
         FOREIGN KEY (related_trip_id) REFERENCES active_trip (id)
     );
     """)
-    
     conn.commit()
     conn.close()
 
-
-# --- 3. HELPER FUNCTIONS (PASSWORD & DB) ---
-# (Unchanged)
 def get_db_connection():
     """Helper function to create a database connection."""
     conn = sqlite3.connect('shuttle.db')
-    conn.row_factory = sqlite3.Row # This lets us access columns by name
+    conn.row_factory = sqlite3.Row 
     return conn
 
 def hash_password(password):
@@ -136,19 +114,14 @@ def seed_data():
     """Populates the database with initial test data."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     cursor.execute("SELECT id FROM user WHERE username = 'admin'")
     if cursor.fetchone():
         conn.close()
         return
-
     print("Seeding database...")
-    
-    # 1. Create Users
     admin_pass = hash_password("admin123")
     driver_pass = hash_password("driver123")
     rider_pass = hash_password("rider123")
-    
     cursor.execute("""
     INSERT INTO user (username, email, password_hash, role, wallet_balance)
     VALUES 
@@ -158,18 +131,11 @@ def seed_data():
     """, (admin_pass, UserRole.ADMIN.value, 
           driver_pass, UserRole.DRIVER.value, 
           rider_pass, UserRole.RIDER.value))
-
-    # 2. Create Stops
     cursor.execute("INSERT INTO stop (name) VALUES ('Library'), ('Engineering Bldg'), ('Dorm Quad'), ('Student Union')")
-
-    # 3. Create a Route
     cursor.execute("INSERT INTO route (name, base_fare, price_per_km) VALUES ('Campus Loop', 0.50, 0.25)")
     route_id = cursor.lastrowid 
-
-    # 4. Link Stops to the Route
     stops = cursor.execute("SELECT id, name FROM stop").fetchall()
     stop_map = {name: id for id, name in stops} 
-    
     route_stops = [
         (route_id, stop_map['Library'], 1, 0.0),
         (route_id, stop_map['Engineering Bldg'], 2, 0.8),
@@ -177,17 +143,11 @@ def seed_data():
         (route_id, stop_map['Student Union'], 4, 2.1)
     ]
     cursor.executemany("INSERT INTO route_stop (route_id, stop_id, stop_order, distance_from_start) VALUES (?, ?, ?, ?)", route_stops)
-
-    # 5. Create a Shuttle
     cursor.execute("INSERT INTO shuttle (name, capacity) VALUES ('Shuttle #1', 15)")
-    
     conn.commit()
     conn.close()
     print("Database seeding complete.")
 
-
-# --- 4. CORE USER LOGIC FUNCTIONS ---
-# (Unchanged: register_user, login_user)
 def register_user():
     """Handles the user registration flow."""
     print("\n--- New User Registration ---")
@@ -195,14 +155,11 @@ def register_user():
     email = input("Email: ").strip()
     password = getpass.getpass("Password: ").strip()
     password_confirm = getpass.getpass("Confirm Password: ").strip()
-    
     if password != password_confirm:
         print("Passwords do not match. Please try again.")
         return
-
     role = UserRole.RIDER.value
     hashed_password = hash_password(password)
-    
     conn = get_db_connection()
     try:
         conn.cursor().execute(
@@ -221,14 +178,11 @@ def login_user():
     print("\n--- User Login ---")
     username = input("Username: ").strip()
     password = getpass.getpass("Password: ").strip()
-    
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     cursor.execute("SELECT * FROM user WHERE username = ?", (username,))
     user = cursor.fetchone()
     conn.close()
-    
     if user and check_password(user['password_hash'], password):
         print(f"\nWelcome, {user['username']}! (Role: {user['role']})")
         return user 
@@ -236,9 +190,6 @@ def login_user():
         print("Invalid username or password.")
         return None
 
-
-# --- 5. RIDER HELPER FUNCTIONS ---
-# (Unchanged: view_balance, add_funds, view_ride_history)
 def view_balance(user):
     """Fetches and displays the user's current wallet balance."""
     conn = get_db_connection()
@@ -247,7 +198,6 @@ def view_balance(user):
         (user['id'],)
     ).fetchone()
     conn.close()
-    
     print(f"\nYour current wallet balance is: ${balance['wallet_balance']:.2f}")
 
 def add_funds(user):
@@ -258,12 +208,9 @@ def add_funds(user):
         if amount <= 0:
             print("Amount must be positive.")
             return
-
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         cursor.execute("UPDATE user SET wallet_balance = wallet_balance + ? WHERE id = ?", (amount, user['id']))
-        
         cursor.execute(
             """
             INSERT INTO transaction_log (rider_id, amount, type, timestamp) 
@@ -271,12 +218,9 @@ def add_funds(user):
             """,
             (user['id'], amount, TransactionType.ADD_FUNDS.value, datetime.datetime.now().isoformat())
         )
-        
         conn.commit()
-        
         print(f"${amount:.2f} successfully added.")
         view_balance(user) 
-        
     except ValueError:
         print("Invalid amount. Please enter a number.")
     except Exception as e:
@@ -300,20 +244,14 @@ def view_ride_history(user):
         (user['id'], TransactionType.RIDE_PAYMENT.value)
     ).fetchall()
     conn.close()
-    
     if not history:
         print("You have no ride history.")
         return
-        
     print("Date & Time            | Amount  | Trip ID")
     print("-" * 40)
     for ride in history:
         ts = datetime.datetime.fromisoformat(ride['timestamp']).strftime('%Y-%m-%d %H:%M')
         print(f"{ts:<20} | ${ride['amount'] * -1:<7.2f} | {ride['related_trip_id']}")
-
-
-# --- 6. ADMIN HELPER FUNCTIONS ---
-# (Contains existing and NEW functions)
 
 def view_all_users():
     """Admin function to view all users."""
@@ -323,7 +261,6 @@ def view_all_users():
         "SELECT id, username, email, role, wallet_balance FROM user"
     ).fetchall()
     conn.close()
-    
     print("ID | Username   | Email            | Role    | Balance")
     print("-" * 55)
     for user in users:
@@ -342,7 +279,6 @@ def view_all_transactions():
         """
     ).fetchall()
     conn.close()
-    
     if not txns:
         print("No transactions found.")
         return
@@ -353,17 +289,13 @@ def view_all_transactions():
         ts = datetime.datetime.fromisoformat(t['timestamp']).strftime('%Y-%m-%d %H:%M')
         print(f"{t['id']:<3} | {ts:<20} | {t['username']:<10} | {t['type']:<13} | ${t['amount']:.2f}")
 
-# --- NEW ADMIN FUNCTIONS START HERE ---
-
 def create_stop():
     """Admin function to create a new stop."""
     print("\n--- Create New Stop ---")
     name = input("Enter new stop name: ").strip()
-    
     if not name:
         print("Name cannot be empty.")
         return
-
     conn = get_db_connection()
     try:
         conn.cursor().execute("INSERT INTO stop (name) VALUES (?)", (name,))
@@ -383,17 +315,14 @@ def create_shuttle():
     try:
         name = input("Enter shuttle name (e.g., 'Shuttle #2'): ").strip()
         capacity = int(input("Enter shuttle capacity: "))
-        
         if not name:
             print("Name cannot be empty.")
             return
-        
         conn = get_db_connection()
         conn.cursor().execute("INSERT INTO shuttle (name, capacity) VALUES (?, ?)", (name, capacity))
         conn.commit()
         conn.close()
         print(f"Success: Shuttle '{name}' created with capacity {capacity}.")
-        
     except ValueError:
         print("Error: Capacity must be an integer.")
     except Exception as e:
@@ -406,11 +335,9 @@ def create_route():
         name = input("Enter new route name (e.g., 'Express Library'): ").strip()
         base_fare = float(input("Enter base fare (e.g., 0.75): $"))
         price_per_km = float(input("Enter price per km (e.g., 0.30): $"))
-        
         if not name:
             print("Name cannot be empty.")
             return
-            
         conn = get_db_connection()
         conn.cursor().execute(
             "INSERT INTO route (name, base_fare, price_per_km) VALUES (?, ?, ?)",
@@ -419,7 +346,6 @@ def create_route():
         conn.commit()
         conn.close()
         print(f"Success: Route '{name}' created.")
-        
     except ValueError:
         print("Error: Fares must be numbers.")
     except sqlite3.IntegrityError:
@@ -431,34 +357,25 @@ def add_stop_to_route():
     """Admin function to add an existing stop to an existing route."""
     print("\n--- Add Stop to Route ---")
     conn = get_db_connection()
-    
     try:
-        # 1. List and select route
         routes = conn.cursor().execute("SELECT id, name FROM route").fetchall()
         print("Available Routes:")
         for r in routes:
             print(f"  ID {r['id']}: {r['name']}")
         route_id = int(input("Enter Route ID to modify: "))
-        
-        # 2. List and select stop
         stops = conn.cursor().execute("SELECT id, name FROM stop").fetchall()
         print("\nAvailable Stops:")
         for s in stops:
             print(f"  ID {s['id']}: {s['name']}")
         stop_id = int(input("Enter Stop ID to add: "))
-        
-        # 3. Get ordering info
         stop_order = int(input("Enter stop order (e.g., 1, 2, 3...): "))
         distance_from_start = float(input("Enter distance from start (in km): "))
-        
-        # 4. Insert into DB
         conn.cursor().execute(
             "INSERT INTO route_stop (route_id, stop_id, stop_order, distance_from_start) VALUES (?, ?, ?, ?)",
             (route_id, stop_id, stop_order, distance_from_start)
         )
         conn.commit()
         print("Success: Stop added to route.")
-        
     except ValueError:
         print("Error: IDs and order must be integers, distance must be a number.")
     except Exception as e:
@@ -474,24 +391,17 @@ def adjust_user_balance():
         username = input("Enter username of the user to adjust: ").strip()
         amount = float(input("Enter amount to add (use negative for removal): $"))
         reason = input("Enter reason for adjustment (e.g., 'Refund'): ").strip()
-        
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # 1. Find user
         user = cursor.execute("SELECT id FROM user WHERE username = ?", (username,)).fetchone()
         if not user:
             print(f"Error: User '{username}' not found.")
             conn.close()
             return
-            
-        # 2. Update balance
         cursor.execute(
             "UPDATE user SET wallet_balance = wallet_balance + ? WHERE id = ?",
             (amount, user['id'])
         )
-        
-        # 3. Log the adjustment
         cursor.execute(
             """
             INSERT INTO transaction_log (rider_id, amount, type, timestamp) 
@@ -499,10 +409,8 @@ def adjust_user_balance():
             """,
             (user['id'], amount, TransactionType.ADMIN_ADJUSTMENT.value, datetime.datetime.now().isoformat())
         )
-        
         conn.commit()
         print(f"Success: User '{username}'s balance adjusted by ${amount:.2f}.")
-        
     except ValueError:
         print("Error: Amount must be a number.")
     except Exception as e:
@@ -512,12 +420,6 @@ def adjust_user_balance():
         if conn:
             conn.close()
 
-# --- NEW ADMIN FUNCTIONS END HERE ---
-
-
-# --- 7. CORE SHUTTLE LOGIC (TAP-ON / TAP-OFF) ---
-# (Contains process_rider_tap, NEW handle_end_of_shift, and MODIFIED start_driver_session)
-
 def process_rider_tap(rider_username, current_route_stop, shuttle_id):
     """
     The main "brain" of the system.
@@ -525,57 +427,37 @@ def process_rider_tap(rider_username, current_route_stop, shuttle_id):
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
-        # 1. GET RIDER DATA
         rider = cursor.execute("SELECT * FROM user WHERE username = ?", (rider_username,)).fetchone()
         if not rider:
             print(f"Error: Rider '{rider_username}' not found.")
             return
-
-        # 2. GET CURRENT ROUTE & STOP DATA
         current_stop_data = cursor.execute(
             "SELECT * FROM route_stop WHERE id = ?", (current_route_stop['id'],)
         ).fetchone()
-        
         route_data = cursor.execute(
             "SELECT * FROM route WHERE id = ?", (current_stop_data['route_id'],)
         ).fetchone()
-
-        # 3. CHECK FOR AN ACTIVE TRIP
         active_trip = cursor.execute(
             "SELECT * FROM active_trip WHERE rider_id = ? AND status = ?",
             (rider['id'], TripStatus.ACTIVE.value)
         ).fetchone()
-
         if active_trip:
-            # --- RIDER HAS AN ACTIVE TRIP (Potential TAP-OFF or Rule 1) ---
-            
             tap_on_stop_data = cursor.execute(
                 "SELECT * FROM route_stop WHERE id = ?", (active_trip['tap_on_route_stop_id'],)
             ).fetchone()
-
-            # Rule 3 Check (Accidental Double Tap)
             if active_trip['tap_on_route_stop_id'] == current_stop_data['id']:
                 print(f"[{rider['username']}] ALREADY TAPPED ON at this stop. Tap ignored.")
                 return
-
-            # Check if Tap-Off is on the SAME route
             if tap_on_stop_data['route_id'] == current_stop_data['route_id']:
-                # --- VALID TAP-OFF ---
                 print(f"[{rider['username']}] Tapping OFF...")
-                
                 dist_on = tap_on_stop_data['distance_from_start']
                 dist_off = current_stop_data['distance_from_start']
                 distance_traveled = abs(dist_off - dist_on)
-                
                 fare = route_data['base_fare'] + (distance_traveled * route_data['price_per_km'])
                 fare = round(fare, 2) 
-                
                 new_balance = rider['wallet_balance'] - fare
-                
                 cursor.execute("UPDATE user SET wallet_balance = ? WHERE id = ?", (new_balance, rider['id']))
-                
                 cursor.execute(
                     """
                     INSERT INTO transaction_log (rider_id, amount, type, timestamp, related_trip_id)
@@ -583,52 +465,34 @@ def process_rider_tap(rider_username, current_route_stop, shuttle_id):
                     """,
                     (rider['id'], -fare, TransactionType.RIDE_PAYMENT.value, datetime.datetime.now().isoformat(), active_trip['id'])
                 )
-                
                 cursor.execute("UPDATE active_trip SET status = ? WHERE id = ?", (TripStatus.COMPLETED.value, active_trip['id']))
-                
                 print(f"  Fare: ${fare:.2f}. New Balance: ${new_balance:.2f}")
-
             else:
-                # --- Rule 1 Check (Forgot to Tap-Off on a DIFFERENT route) ---
                 print(f"[{rider['username']}] FORGOT TO TAP OFF on a previous trip.")
-                # Resolve the old trip by charging max fare
-                
                 old_route_id = tap_on_stop_data['route_id']
                 last_stop_data = cursor.execute(
                     "SELECT * FROM route_stop WHERE route_id = ? ORDER BY stop_order DESC LIMIT 1",
                     (old_route_id,)
                 ).fetchone()
-                
                 old_route_data = cursor.execute("SELECT * FROM route WHERE id = ?", (old_route_id,)).fetchone()
-                
                 max_dist = abs(last_stop_data['distance_from_start'] - tap_on_stop_data['distance_from_start'])
                 max_fare = old_route_data['base_fare'] + (max_dist * old_route_data['price_per_km'])
                 max_fare = round(max_fare, 2)
-                
                 new_balance = rider['wallet_balance'] - max_fare
-                
                 cursor.execute("UPDATE user SET wallet_balance = ? WHERE id = ?", (new_balance, rider['id']))
                 cursor.execute(
                     "INSERT INTO transaction_log (rider_id, amount, type, timestamp, related_trip_id) VALUES (?, ?, ?, ?, ?)",
                     (rider['id'], -max_fare, TransactionType.RIDE_PAYMENT.value, datetime.datetime.now().isoformat(), active_trip['id'])
                 )
                 cursor.execute("UPDATE active_trip SET status = ? WHERE id = ?", (TripStatus.AUTO_COMPLETED.value, active_trip['id']))
-                
                 print(f"  Charged max fare: ${max_fare:.2f}. New Balance: ${new_balance:.2f}")
-                
                 rider = cursor.execute("SELECT * FROM user WHERE id = ?", (rider['id'],)).fetchone()
-                active_trip = None # Fall through to Tap-On logic
-
+                active_trip = None 
         if not active_trip:
-            # --- RIDER HAS NO ACTIVE TRIP (This is a TAP-ON) ---
             print(f"[{rider['username']}] Tapping ON...")
-            
-            # Rule 2 Check (Low Balance)
             if rider['wallet_balance'] < route_data['base_fare']:
                 print(f"  TAP-ON FAILED. Insufficient funds (Min: ${route_data['base_fare']:.2f}, Has: ${rider['wallet_balance']:.2f})")
                 return
-            
-            # All checks passed, create a new trip
             cursor.execute(
                 """
                 INSERT INTO active_trip (rider_id, shuttle_id, tap_on_route_stop_id, tap_on_time, status)
@@ -637,16 +501,13 @@ def process_rider_tap(rider_username, current_route_stop, shuttle_id):
                 (rider['id'], shuttle_id, current_stop_data['id'], datetime.datetime.now().isoformat(), TripStatus.ACTIVE.value)
             )
             print("  TAP-ON Successful. Trip started.")
-            
         conn.commit()
-
     except Exception as e:
         print(f"An error occurred: {e}")
         conn.rollback() 
     finally:
         conn.close()
 
-# --- NEW DRIVER FUNCTION ---
 def handle_end_of_shift(shuttle_id):
     """
     Finds all active trips on a shuttle and auto-completes them
@@ -655,68 +516,47 @@ def handle_end_of_shift(shuttle_id):
     print("\nEnding shift. Checking for active riders...")
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Find all active trips on this shuttle
     active_trips = cursor.execute(
         "SELECT * FROM active_trip WHERE shuttle_id = ? AND status = ?",
         (shuttle_id, TripStatus.ACTIVE.value)
     ).fetchall()
-    
     if not active_trips:
         print("No active trips to resolve.")
         conn.close()
         return
-
     print(f"Resolving {len(active_trips)} active trip(s) for end of shift...")
-    
     for trip in active_trips:
         try:
-            # Get all data needed to calculate max fare
             rider = cursor.execute("SELECT * FROM user WHERE id = ?", (trip['rider_id'],)).fetchone()
             tap_on_stop_data = cursor.execute(
                 "SELECT * FROM route_stop WHERE id = ?", (trip['tap_on_route_stop_id'],)
             ).fetchone()
-            
             route_id = tap_on_stop_data['route_id']
             route_data = cursor.execute("SELECT * FROM route WHERE id = ?", (route_id,)).fetchone()
-            
             last_stop_data = cursor.execute(
                 "SELECT * FROM route_stop WHERE route_id = ? ORDER BY stop_order DESC LIMIT 1",
                 (route_id,)
             ).fetchone()
-            
-            # Calculate max fare
             max_dist = abs(last_stop_data['distance_from_start'] - tap_on_stop_data['distance_from_start'])
             max_fare = route_data['base_fare'] + (max_dist * route_data['price_per_km'])
             max_fare = round(max_fare, 2)
-            
             new_balance = rider['wallet_balance'] - max_fare
-            
-            # 1. Charge user
             cursor.execute("UPDATE user SET wallet_balance = ? WHERE id = ?", (new_balance, rider['id']))
-            # 2. Log transaction
             cursor.execute(
                 "INSERT INTO transaction_log (rider_id, amount, type, timestamp, related_trip_id) VALUES (?, ?, ?, ?, ?)",
                 (rider['id'], -max_fare, TransactionType.RIDE_PAYMENT.value, datetime.datetime.now().isoformat(), trip['id'])
             )
-            # 3. Close trip
             cursor.execute("UPDATE active_trip SET status = ? WHERE id = ?", (TripStatus.AUTO_COMPLETED.value, trip['id']))
-            
             print(f"  Auto-completed trip for {rider['username']}. Charged max fare: ${max_fare:.2f}.")
-            
         except Exception as e:
             print(f"  Error resolving trip {trip['id']}: {e}")
-
     conn.commit()
     conn.close()
 
-# --- MODIFIED DRIVER FUNCTION ---
 def start_driver_session(driver_user):
     """The main interface for a driver's active shift."""
     conn = get_db_connection()
-    
     try:
-        # 1. Select a Shuttle
         shuttles = conn.execute("SELECT * FROM shuttle").fetchall()
         print("\n--- Select Your Shuttle ---")
         for s in shuttles:
@@ -727,15 +567,11 @@ def start_driver_session(driver_user):
             print("Invalid shuttle ID.")
             conn.close()
             return
-            
-        # 2. Select a Route
         routes = conn.execute("SELECT * FROM route").fetchall()
         print("\n--- Select Your Route ---")
         for r in routes:
             print(f"{r['id']}: {r['name']} (Base: ${r['base_fare']:.2f}, Per/km: ${r['price_per_km']:.2f})")
         route_id = int(input("Enter route ID: "))
-            
-        # 3. Load all stops for this route
         all_stops = conn.execute(
             """
             SELECT rs.id, rs.stop_order, rs.distance_from_start, s.name, r.name AS route_name
@@ -746,48 +582,35 @@ def start_driver_session(driver_user):
             ORDER BY rs.stop_order
             """, (route_id,)
         ).fetchall()
-        
-        conn.close() # Close connection, it will be re-opened by helpers
-        
+        conn.close()
         if not all_stops:
             print("Error: This route has no stops defined. Returning to menu.")
             return
-
-        # 4. Start the main driving loop
         current_stop_index = 0
         total_stops = len(all_stops)
-        
         print(f"\n--- SESSION STARTED ---")
         print(f"Driver: {driver_user['username']}, Shuttle: {shuttle['name']}, Route: {all_stops[0]['route_name']}")
         
         while True:
             current_stop = all_stops[current_stop_index]
-            
             print("\n" + "="*40)
             print(f"  Current Stop: ({current_stop['stop_order']}/{total_stops}) {current_stop['name']}")
             print("="*40)
             print("Commands: [next] stop, [tap] rider, [end] session")
-            
             cmd = input("Enter command: ").strip().lower()
-            
             if cmd == 'next':
-                current_stop_index = (current_stop_index + 1) % total_stops # Loop back to start
+                current_stop_index = (current_stop_index + 1) % total_stops
                 print(f"Moving to next stop...")
-            
             elif cmd == 'tap':
                 rider_username = input("  Enter rider username to tap: ").strip()
                 if rider_username:
                     process_rider_tap(rider_username, current_stop, shuttle_id)
-            
             elif cmd == 'end':
-                # --- THIS IS THE NEW LOGIC ---
                 handle_end_of_shift(shuttle_id)
                 print("Ending driving session...")
                 break
-            
             else:
-                print("Invalid command.")
-                
+                print("Invalid command.")   
     except ValueError:
         print("Invalid ID. Returning to menu.")
         if conn:
@@ -797,10 +620,6 @@ def start_driver_session(driver_user):
         if conn:
             conn.close()
 
-
-# --- 8. ROLE-SPECIFIC MENUS ---
-# (Rider and Driver menus are modified, Admin is heavily modified)
-
 def rider_menu(user):
     """Displays the menu for a logged-in Rider."""
     while True:
@@ -809,9 +628,7 @@ def rider_menu(user):
         print("2. Add Funds to Wallet")
         print("3. View My Ride History")
         print("9. Logout")
-        
         choice = input("Enter choice: ")
-        
         if choice == '1':
             view_balance(user)
         elif choice == '2':
@@ -830,9 +647,7 @@ def driver_menu(user):
         print("\n--- Driver Dashboard ---")
         print("1. Start Driving Session")
         print("9. Logout")
-        
         choice = input("Enter choice: ")
-        
         if choice == '1':
             start_driver_session(user)
         elif choice == '9':
@@ -841,7 +656,6 @@ def driver_menu(user):
         else:
             print("Invalid choice. Please try again.")
 
-# --- MODIFIED ADMIN MENU ---
 def admin_menu(user):
     """Displays the menu for a logged-in Admin."""
     while True:
@@ -857,9 +671,7 @@ def admin_menu(user):
         print("  7. Adjust User Balance")
         print("---")
         print("  9. Logout")
-        
         choice = input("Enter choice: ")
-        
         if choice == '1':
             view_all_users()
         elif choice == '2':
@@ -880,35 +692,25 @@ def admin_menu(user):
         else:
             print("Invalid choice. Please try again.")
 
-
-# --- 9. MAIN PROGRAM EXECUTION ---
-# (Unchanged)
 def main_menu():
     """The main entry point of the CLI application."""
     current_user = None 
-
     while True:
         if current_user:
             role = current_user['role']
-            
             if role == UserRole.RIDER.value:
                 rider_menu(current_user)
             elif role == UserRole.DRIVER.value:
                 driver_menu(current_user)
             elif role == UserRole.ADMIN.value:
                 admin_menu(current_user)
-            
             current_user = None
-        
         else:
-            # Logged-out menu
             print("\n--- Welcome to the Shuttle System ---")
             print("1. Login")
             print("2. Register New Rider Account")
             print("3. Exit")
-            
             choice = input("Enter choice: ")
-            
             if choice == '1':
                 current_user = login_user() 
             elif choice == '2':
@@ -919,8 +721,7 @@ def main_menu():
             else:
                 print("Invalid choice. Please try again.")
 
-
 if __name__ == "__main__":
     setup_database()
     seed_data()
-    main_menu() # Start the main application loop
+    main_menu() 
